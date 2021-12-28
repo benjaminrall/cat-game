@@ -15,8 +15,7 @@ public class PlayerController : MonoBehaviour
     public Vector2 stationaryJumpMultiplier;
     [Space] 
     public float wallSlideSpeed = 1;
-    public float wallSlideSmoothing = .2f;
-    public float wallHangSmoothing = .5f;
+    public float wallClimbSpeed = 2f;
     [Space] 
     [Range(0, .3f)] public float movementSmoothing = .05f;
     [Space]
@@ -36,6 +35,7 @@ public class PlayerController : MonoBehaviour
     private bool _onRightClimbableWall;
     private bool _onLeftClimbableWall;
     private bool _running;
+    private bool _climbedWall;
     private bool _facingRight;
     
     private Vector3 _velocity;
@@ -49,6 +49,7 @@ public class PlayerController : MonoBehaviour
         _onLeftWall = false;
         _running = false;
         _facingRight = true;
+        _climbedWall = false;
         _velocity = Vector3.zero;
     }
 
@@ -65,14 +66,17 @@ public class PlayerController : MonoBehaviour
         Vector3 localScale = t.localScale;
         Vector3 verticalOffset = new (0, localScale.y / 2, 0);
         Vector3 horizontalOffset = new (localScale.x / 2, 0, 0);
-        
-        Collider[] groundColliders = Physics.OverlapSphere(pos - verticalOffset, groundCollisionRadius, ground);
-        Collider[] rightWallColliders = Physics.OverlapSphere(pos + horizontalOffset, wallCollisionRadius, walls);
-        Collider[] leftWallColliders = Physics.OverlapSphere(pos - horizontalOffset, wallCollisionRadius, walls);
-        Collider[] rightClimbableWallColliders =
-            Physics.OverlapSphere(pos + horizontalOffset, wallCollisionRadius, climbableWalls);
-        Collider[] leftClimbableWallColliders =
-            Physics.OverlapSphere(pos - horizontalOffset, wallCollisionRadius, climbableWalls);
+
+        Collider[] groundColliders = Physics.OverlapBox(pos - verticalOffset,
+            new Vector3((localScale.x - .001f) / 2, groundCollisionRadius, 0), Quaternion.identity, ground);
+        Collider[] rightWallColliders = Physics.OverlapBox(pos + horizontalOffset,
+            new Vector3(wallCollisionRadius, (localScale.y - 0.001f) / 2, 0), Quaternion.identity, walls);
+        Collider[] leftWallColliders = Physics.OverlapBox(pos - horizontalOffset,
+            new Vector3(wallCollisionRadius, (localScale.y - 0.001f) / 2, 0), Quaternion.identity, walls);
+        Collider[] rightClimbableWallColliders = Physics.OverlapBox(pos + horizontalOffset,
+            new Vector3(wallCollisionRadius, (localScale.y - 0.001f) / 2, 0), Quaternion.identity, climbableWalls);
+        Collider[] leftClimbableWallColliders = Physics.OverlapBox(pos - horizontalOffset,
+            new Vector3(wallCollisionRadius, (localScale.y - 0.001f) / 2, 0), Quaternion.identity, climbableWalls);
 
         _grounded = groundColliders.Length > 0;
         _onRightWall = rightWallColliders.Length > 0;
@@ -87,26 +91,35 @@ public class PlayerController : MonoBehaviour
         bool jump = Input.GetButtonDown("Jump");
         bool running = Input.GetButton("Sprint");
         float movement = Input.GetAxisRaw("Horizontal");
-
+        float climbing = Input.GetAxisRaw("Vertical");
+        
         // Adjusts input for running and locks movement to maximum in each direction
         _running = running || _running;
         if (movement != 0)
+        {
+            _facingRight = movement > 0;
             movement = movement > 0 ? 1 : -1;
+        }
         else _running = false;
+        if (climbing != 0)
+        {
+            _running = true;
+            climbing = climbing > 0 ? 1 : -1;
+        }
+        
         
         // Movement
-        if (_grounded)
+        if (_grounded || _climbedWall && !(_onLeftClimbableWall || _onRightClimbableWall))
         {
             float targetSpeed = movement * maxSpeed;
             targetSpeed = _running ? targetSpeed * runningMultiplier : targetSpeed;
-            
+
+            if (_facingRight && _onRightClimbableWall || !_facingRight && _onLeftClimbableWall)
+                targetSpeed = 0;
             Vector3 velocity = _rigidbody.velocity;
             Vector3 targetVelocity = new (targetSpeed, velocity.y, velocity.z);
-            
-            _rigidbody.velocity = Vector3.SmoothDamp(velocity, targetVelocity, ref _velocity, movementSmoothing);
 
-            if (movement != 0)
-                _facingRight = movement > 0;
+            _rigidbody.velocity = Vector3.SmoothDamp(velocity, targetVelocity, ref _velocity, movementSmoothing);
         }
 
         // Jumping
@@ -135,6 +148,7 @@ public class PlayerController : MonoBehaviour
             _rigidbody.AddForce(force.x, force.y, 0);
         }
 
+        
         // Wall sliding
         if (!_grounded && (_onRightWall || _onLeftWall
                                         || _onRightClimbableWall && movement <= 0 
@@ -145,13 +159,22 @@ public class PlayerController : MonoBehaviour
                 Vector3.SmoothDamp(_rigidbody.velocity, targetVelocity, ref _velocity, movementSmoothing);
         }
         
-        // Wall hang
+        
         _rigidbody.useGravity = true;
-        if (!_grounded && (_onRightClimbableWall && movement > 0 || _onLeftClimbableWall && movement < 0))
+        _climbedWall = false;
+        if (_onRightClimbableWall && movement > 0 || _onLeftClimbableWall && movement < 0)
         {
+            _rigidbody.useGravity = false;
+            
+            // Wall hang
             _rigidbody.velocity =
                 Vector3.SmoothDamp(_rigidbody.velocity, Vector3.zero, ref _velocity, movementSmoothing);
-            _rigidbody.useGravity = false;
+
+            // Wall climb
+            _climbedWall = climbing != 0;
+            Vector3 velocity = _rigidbody.velocity;
+            Vector3 targetVelocity = new (velocity.x, climbing * wallClimbSpeed, velocity.z);
+            _rigidbody.velocity = Vector3.SmoothDamp(velocity, targetVelocity, ref _velocity, movementSmoothing);
         }
     }
 }
