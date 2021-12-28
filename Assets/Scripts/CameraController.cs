@@ -6,28 +6,22 @@ using Random = UnityEngine.Random;
 
 public class CameraController : MonoBehaviour
 {
-    // target transform for camera to follow
+    // Target transform for camera to follow
     public Transform target;
     
-    // smoothing speed of camera motion
-    [Range(0.0f, 1.0f)]
-    public float smoothingSpeed = 0.125f;
-
-    // camera offset to target
+    // Smoothing speed of camera motion
+    [Range(0.0f, 1.0f)] public float smoothingSpeed = 0.125f;
+    
+    // How much the camera should be offset to the player
     public Vector3 offset;
 
-    private void Start()
-    {
-        StartCoroutine(Shake(10, 0.05f, 15));
-    }
-
-    // late update so that camera follow calculations do not interfere with player movement etc.
-    private void LateUpdate()
+    // Late update so that camera follow calculations do not interfere with player movement etc.
+    private void FixedUpdate()
     {
         transform.position = Vector3.Lerp(transform.position, target.position + offset, smoothingSpeed);
     }
 
-    // coroutine for shake function
+    // Coroutine for shaking the camera
     public IEnumerator Shake(float duration, float magnitude, float speed)
     {
         float elapsed = 0.0f;
