@@ -15,6 +15,8 @@ public class PlayerController : MonoBehaviour
     public Vector2 stationaryJumpMultiplier;
     [Space] 
     public float wallSlideSpeed = 1;
+    public float wallSlideSmoothing = .2f;
+    public float wallHangSmoothing = .5f;
     [Space] 
     [Range(0, .3f)] public float movementSmoothing = .05f;
     [Space]
@@ -31,6 +33,8 @@ public class PlayerController : MonoBehaviour
     private bool _grounded;
     private bool _onRightWall;
     private bool _onLeftWall;
+    private bool _onRightClimbableWall;
+    private bool _onLeftClimbableWall;
     private bool _running;
     private bool _facingRight;
     
@@ -49,6 +53,35 @@ public class PlayerController : MonoBehaviour
     }
 
     private void Update()
+    {
+        Move();
+    }
+
+    // Collision detection
+    private void FixedUpdate()
+    {
+        Transform t = transform;
+        Vector3 pos = t.position;
+        Vector3 localScale = t.localScale;
+        Vector3 verticalOffset = new (0, localScale.y / 2, 0);
+        Vector3 horizontalOffset = new (localScale.x / 2, 0, 0);
+        
+        Collider[] groundColliders = Physics.OverlapSphere(pos - verticalOffset, groundCollisionRadius, ground);
+        Collider[] rightWallColliders = Physics.OverlapSphere(pos + horizontalOffset, wallCollisionRadius, walls);
+        Collider[] leftWallColliders = Physics.OverlapSphere(pos - horizontalOffset, wallCollisionRadius, walls);
+        Collider[] rightClimbableWallColliders =
+            Physics.OverlapSphere(pos + horizontalOffset, wallCollisionRadius, climbableWalls);
+        Collider[] leftClimbableWallColliders =
+            Physics.OverlapSphere(pos - horizontalOffset, wallCollisionRadius, climbableWalls);
+
+        _grounded = groundColliders.Length > 0;
+        _onRightWall = rightWallColliders.Length > 0;
+        _onLeftWall = leftWallColliders.Length > 0;
+        _onRightClimbableWall = rightClimbableWallColliders.Length > 0;
+        _onLeftClimbableWall = leftClimbableWallColliders.Length > 0;
+    }
+
+    private void Move()
     {
         // Gets inputs
         bool jump = Input.GetButtonDown("Jump");
@@ -94,37 +127,31 @@ public class PlayerController : MonoBehaviour
 
             force = _facingRight switch
             {
-                true when _onRightWall => Vector2.zero,
-                false when _onLeftWall => Vector2.zero,
+                true when _onRightWall || _onRightClimbableWall => Vector2.zero,
+                false when _onLeftWall || _onLeftClimbableWall => Vector2.zero,
                 _ => force
             };
             
             _rigidbody.AddForce(force.x, force.y, 0);
         }
 
-        if (!_grounded && (_onRightWall || _onLeftWall))
+        // Wall sliding
+        if (!_grounded && (_onRightWall || _onLeftWall
+                                        || _onRightClimbableWall && movement <= 0 
+                                        || _onLeftClimbableWall && movement >= 0))
         {
             Vector3 targetVelocity = new (0, -wallSlideSpeed, 0);
             _rigidbody.velocity =
                 Vector3.SmoothDamp(_rigidbody.velocity, targetVelocity, ref _velocity, movementSmoothing);
         }
-    }
-
-    // Collision detection
-    private void FixedUpdate()
-    {
-        Transform t = transform;
-        Vector3 pos = t.position;
-        Vector3 localScale = t.localScale;
-        Vector3 verticalOffset = new (0, localScale.y / 2, 0);
-        Vector3 horizontalOffset = new (localScale.x / 2, 0, 0);
         
-        Collider[] groundColliders = Physics.OverlapSphere(pos - verticalOffset, groundCollisionRadius, ground);
-        Collider[] rightWallColliders = Physics.OverlapSphere(pos + horizontalOffset, wallCollisionRadius, walls);
-        Collider[] leftWallColliders = Physics.OverlapSphere(pos - horizontalOffset, wallCollisionRadius, walls);
-
-        _grounded = groundColliders.Length > 0;
-        _onRightWall = rightWallColliders.Length > 0;
-        _onLeftWall = leftWallColliders.Length > 0;
+        // Wall hang
+        _rigidbody.useGravity = true;
+        if (!_grounded && (_onRightClimbableWall && movement > 0 || _onLeftClimbableWall && movement < 0))
+        {
+            _rigidbody.velocity =
+                Vector3.SmoothDamp(_rigidbody.velocity, Vector3.zero, ref _velocity, movementSmoothing);
+            _rigidbody.useGravity = false;
+        }
     }
 }
