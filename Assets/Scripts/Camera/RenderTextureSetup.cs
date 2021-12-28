@@ -10,7 +10,7 @@ public class RenderTextureSetup : MonoBehaviour
     public RenderTexture rt;
     public GameObject renderPlane;
 
-    public int textHeight = 216;
+    public int textureHeight = 216;
 
     private int prevWidth;
     private int prevHeight;
@@ -39,7 +39,7 @@ public class RenderTextureSetup : MonoBehaviour
     void RefreshRenderTexture() // Refreshes the Render Texture - Changing size and resolution
     {
         // Create RenderTexture
-        rt = new RenderTexture((int)(textHeight * renderCam.aspect), textHeight, 16, RenderTextureFormat.ARGB32);
+        rt = new RenderTexture((int)(textureHeight * renderCam.aspect), textureHeight, 16, RenderTextureFormat.ARGB32);
         rt.filterMode = FilterMode.Point;
         rt.Create();
 
